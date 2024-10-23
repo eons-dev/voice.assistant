@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"/>
 
     <application
-        android:label="eons_voice_assistant"
+        android:label="Eons Voice Assistant"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

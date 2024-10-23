@@ -8,7 +8,7 @@
 PRODUCT_NAME = eons_voice_assistant
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.eonsVoiceAssistant
+PRODUCT_BUNDLE_IDENTIFIER = dev.eons.eonsVoiceAssistant
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2024 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2024 dev.eons. All rights reserved.
