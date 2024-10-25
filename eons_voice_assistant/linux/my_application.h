@@ -1,18 +1,18 @@
-#ifndef FLUTTER_MY_APPLICATION_H_
-#define FLUTTER_MY_APPLICATION_H_
+#ifndef FLUTTER_EONS_VOICE_ASSISTANT_H_
+#define FLUTTER_EONS_VOICE_ASSISTANT_H_
 
 #include <gtk/gtk.h>
 
-G_DECLARE_FINAL_TYPE(MyApplication, my_application, MY, APPLICATION,
+G_DECLARE_FINAL_TYPE(EVA, eons_voice_assistant, MY, APPLICATION,
                      GtkApplication)
 
 /**
- * my_application_new:
+ * eons_voice_assistant_new:
  *
  * Creates a new Flutter-based application.
  *
- * Returns: a new #MyApplication.
+ * Returns: a new #EVA.
  */
-MyApplication* my_application_new();
+EVA* eons_voice_assistant_new();
 
-#endif  // FLUTTER_MY_APPLICATION_H_
+#endif  // FLUTTER_EONS_VOICE_ASSISTANT_H_

@@ -1,9 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-void main() => runApp(MyApp());
+void main() => runApp(Eva());
 
-class MyApp extends StatelessWidget {
+class Eva extends StatelessWidget {
   static const platform = MethodChannel('picovoice_wakeword_channel');
 
   @override
@@ -26,28 +27,19 @@ class WakewordScreen extends StatefulWidget {
 
 class _WakewordScreenState extends State<WakewordScreen> {
   String _log = "Logs will appear here";
-  String _apiKey = "";
-  String _wakewordFilePath = "";
   String _serverUrl = "";
 
-  Future<void> _initializeWakeword() async {
-    try {
-      final String result = await MyApp.platform.invokeMethod(
-        'initializeWakeword', 
-        {
-          'apiKey': _apiKey,
-          'wakewordPath': _wakewordFilePath,
-          'serverUrl': _serverUrl,
-        }
-      );
-      setState(() {
-        _log = result;
-      });
-    } on PlatformException catch (e) {
-      setState(() {
-        _log = "Failed to initialize wakeword: '${e.message}'.";
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+
+    Eva.platform.setMethodCallHandler((call) async {
+      if (call.method == "wakewordDetected") {
+        setState(() {
+          _log = "Wakeword detected!";
+        });
+      }
+    });
   }
 
   @override
@@ -55,20 +47,8 @@ class _WakewordScreenState extends State<WakewordScreen> {
     return Column(
       children: [
         TextField(
-          decoration: InputDecoration(labelText: 'Picovoice API Key'),
-          onChanged: (value) => _apiKey = value,
-        ),
-        TextField(
-          decoration: InputDecoration(labelText: 'Wakeword File Path'),
-          onChanged: (value) => _wakewordFilePath = value,
-        ),
-        TextField(
           decoration: InputDecoration(labelText: 'Server URL'),
           onChanged: (value) => _serverUrl = value,
-        ),
-        ElevatedButton(
-          onPressed: _initializeWakeword,
-          child: Text('Initialize Wakeword'),
         ),
         Expanded(
           child: SingleChildScrollView(
