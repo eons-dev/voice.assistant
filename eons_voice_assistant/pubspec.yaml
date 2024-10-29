@@ -31,6 +31,12 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_dotenv: ^5.2.1
+  cupertino_icons: ^1.0.8
+  permission_handler: ^10.2.0
+  http: ^0.13.4
+  record: ^5.1.2
+  path_provider: ^2.0.11
+  logging: ^1.2.0
 
 dev_dependencies:
   flutter_test:
