@@ -49,40 +49,42 @@ class _WakewordScreenState extends State<WakewordScreen> {
 	void initState() {
 		super.initState();
 
-		// Initialize the logging package with a custom handler
+		// Initialize logging
 		Logger.root.level = Level.ALL;
 		Logger.root.onRecord.listen((record) {
-			// Custom formatting for 'EVA' tag and message
 			print(record.message);
-
-			// Update the UI log text
 			setState(() {
-				_logText += "\n${record.message}"; // Append to the visual log
+				_logText += "\n${record.message}";
 			});
 		});
 
+		// Start listening for wakeword
+		_startWakewordDetection();
+	}
+
+	void _startWakewordDetection() {
 		Eva.platform.setMethodCallHandler((call) async {
 			if (call.method == "wakewordDetected") {
 				_log.info("Wakeword detected!");
-				await _recordAndUpload();
+				await _handleWakewordDetection();
 			}
 		});
+
+		_toggleWakeword(true);
 	}
 
-	Future<void> _toggleWakeword() async {
-		if (isListening) {
+	// Handles wakeword detection, stopping the wakeword service and starting the recording
+	Future<void> _handleWakewordDetection() async {
+		await _toggleWakeword(false); // Stop wakeword detection to free up the mic
+		await _recordAndUpload(); // Start recording and upload the audio
+		_toggleWakeword(true); // Restart wakeword detection after upload
+	}
+
+	Future<void> _toggleWakeword(bool start) async {
+		if (start) {
 			try {
-				await Eva.platform.invokeMethod('stopWakeword');
-				_log.info("Wakeword detection stopped.");
-				setState(() {
-					isListening = false;
-				});
-			} on PlatformException catch (e) {
-				_log.info("Failed to stop wakeword detection: '${e.message}'.");
-			}
-		} else {
-			try {
-				final String result = await Eva.platform.invokeMethod('initializeWakeword', {
+				final String result =
+						await Eva.platform.invokeMethod('initializeWakeword', {
 					'accessKey': _accessKey,
 				});
 				_log.info(result);
@@ -91,6 +93,16 @@ class _WakewordScreenState extends State<WakewordScreen> {
 				});
 			} on PlatformException catch (e) {
 				_log.info("Failed to initialize wakeword: '${e.message}'.");
+			}
+		} else {
+			try {
+				await Eva.platform.invokeMethod('stopWakeword');
+				_log.info("Wakeword detection stopped.");
+				setState(() {
+					isListening = false;
+				});
+			} on PlatformException catch (e) {
+				_log.info("Failed to stop wakeword detection: '${e.message}'.");
 			}
 		}
 	}
@@ -107,35 +119,42 @@ class _WakewordScreenState extends State<WakewordScreen> {
 
 		try {
 			await _audioRecorder.start(
-				const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 44100, bitRate: 128000),
+				const RecordConfig(
+						encoder: AudioEncoder.wav, sampleRate: 44100, bitRate: 128000),
 				path: audioFilePath,
 			);
 
 			_log.info("Listening for silence...");
-			_monitorSilence(audioFilePath);
+			await _monitorSilence(audioFilePath); // Now synchronous
 		} catch (e) {
 			_log.info("Recording error: $e");
 		}
 	}
 
+	// Synchronously waits for silence before stopping recording and uploading
 	Future<void> _monitorSilence(String filePath) async {
 		_silenceTimer?.cancel();
+
+		Completer<void> completer = Completer();
 
 		_silenceTimer = Timer.periodic(Duration(milliseconds: 500), (timer) async {
 			final amplitude = await _audioRecorder.getAmplitude();
 
 			if (amplitude.current < -80) {
-				await _audioRecorder.stop();
-				await _uploadAudio(filePath);
+				_log.info("Silence detected.");
+				await _audioRecorder.stop(); // Stop recording
+				await _uploadAudio(filePath); // Upload file synchronously
+				_silenceTimer?.cancel(); // Cancel timer after upload
+				completer.complete(); // Complete the future to exit the loop
 			}
 		});
+
+		// Wait for the timer to complete the recording/upload process
+		return completer.future;
 	}
 
 	Future<void> _uploadAudio(String audioFilePath) async {
-
-		_log.info("Silence detected. Stopping recording...");
-
-		// Check if server URL is set and valid
+		// Validate and upload to server
 		if (_serverUrl.isEmpty) {
 			_log.info("Server URL is empty. Cannot upload.");
 			return;
@@ -157,9 +176,6 @@ class _WakewordScreenState extends State<WakewordScreen> {
 		} else {
 			_log.info("Upload failed: ${response.reasonPhrase}");
 		}
-
-		// Cancel the silence timer after uploading
-		_silenceTimer?.cancel();
 	}
 
 	@override
@@ -179,7 +195,7 @@ class _WakewordScreenState extends State<WakewordScreen> {
 					),
 					SizedBox(height: 20),
 					ElevatedButton(
-						onPressed: _toggleWakeword,
+						onPressed: () => _toggleWakeword(!isListening),
 						child: Text(isListening ? 'Stop' : 'Start'),
 					),
 					Expanded(
