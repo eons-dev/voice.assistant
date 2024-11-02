@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -8,6 +9,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:shelf/shelf.dart';
+import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:shelf_multipart/shelf_multipart.dart';
 
 final _log = Logger("EVA");
 
@@ -39,11 +44,12 @@ class WakewordScreen extends StatefulWidget {
 
 class _WakewordScreenState extends State<WakewordScreen> {
 	String _logText = "Logs will appear here";
-	String _serverUrl = "";
+	String _serverUrl = "http://localhost:9666/frame";
 	String _accessKey = dotenv.env['PICOVOICE_ACCESS_KEY'] ?? '';
 	final AudioRecorder _audioRecorder = AudioRecorder();
 	Timer? _silenceTimer;
 	bool isListening = false;
+	HttpServer? _httpServer;
 
 	@override
 	void initState() {
@@ -60,6 +66,70 @@ class _WakewordScreenState extends State<WakewordScreen> {
 
 		// Start listening for wakeword
 		_startWakewordDetection();
+
+		// Start HTTP server for RESTful audio playback
+		_startHttpServer();
+	}
+
+	// Starts an HTTP server that listens for play audio requests
+	Future<void> _startHttpServer() async {
+		var handler = const Pipeline()
+			.addMiddleware(logRequests())
+			.addHandler(_requestHandler);
+
+		// Start server on localhost at a given port
+		_httpServer = await shelf_io.serve(handler, 'localhost', 6669);
+
+		_log.info('Serving at http://${_httpServer?.address.host}:${_httpServer?.port}');
+	}
+
+	// Handles requests to play audio by reading audio data and playing it
+	Future<Response> _requestHandler(Request request) async {
+		Uint8List? audio;
+
+		// Step 1: Assume the request is multipart and process its parts
+		if (request.multipart() case var multipart?) {
+			await for (final part in multipart.parts) {
+				final contentDisposition = part.headers['content-disposition'];
+
+				if (contentDisposition != null) {
+
+					// Handle file (audio) data
+					if (contentDisposition.contains('name="audio"')) {
+						audio = await part.readBytes();
+					}
+				}
+			}
+		} else {
+			// If the request is not multipart, return a bad request
+			return Response(400, body: 'Expected multipart request');
+		}
+
+		try {
+			await playAudio(audio!);
+			return Response.ok("Audio played successfully");
+		} catch (error) {
+			_log.warning("Error handling play audio request: $error");
+			return Response.internalServerError(body: "Error playing audio");
+		}
+	}
+
+	// Plays audio from Uint8List data
+	Future<void> playAudio(Uint8List audio) async {
+		_log.info("Playing ${audio.length} bytes of audio");
+
+		final tempDir = await getTemporaryDirectory();
+		File file = await File('${tempDir.path}/audio.mp3').create();
+		file.writeAsBytesSync(audio);
+
+		try {
+			AudioPlayer player = AudioPlayer(handleAudioSessionActivation: false);
+			await player.setAudioSource(AudioSource.file(file.path));
+			await player.play();
+			await player.dispose();
+		} catch (error) {
+			_log.warning("Error playing audio. $error");
+		}
 	}
 
 	void _startWakewordDetection() {
@@ -125,7 +195,7 @@ class _WakewordScreenState extends State<WakewordScreen> {
 			);
 
 			_log.info("Listening for silence...");
-			await _monitorSilence(audioFilePath); // Now synchronous
+			await _monitorSilence(audioFilePath);
 		} catch (e) {
 			_log.info("Recording error: $e");
 		}
@@ -134,7 +204,6 @@ class _WakewordScreenState extends State<WakewordScreen> {
 	// Synchronously waits for silence before stopping recording and uploading
 	Future<void> _monitorSilence(String filePath) async {
 		_silenceTimer?.cancel();
-
 		Completer<void> completer = Completer();
 
 		_silenceTimer = Timer.periodic(Duration(milliseconds: 500), (timer) async {
@@ -142,19 +211,17 @@ class _WakewordScreenState extends State<WakewordScreen> {
 
 			if (amplitude.current < -80) {
 				_log.info("Silence detected.");
-				await _audioRecorder.stop(); // Stop recording
-				await _uploadAudio(filePath); // Upload file synchronously
-				_silenceTimer?.cancel(); // Cancel timer after upload
-				completer.complete(); // Complete the future to exit the loop
+				await _audioRecorder.stop();
+				await _uploadAudio(filePath);
+				_silenceTimer?.cancel();
+				completer.complete();
 			}
 		});
 
-		// Wait for the timer to complete the recording/upload process
 		return completer.future;
 	}
 
 	Future<void> _uploadAudio(String audioFilePath) async {
-		// Validate and upload to server
 		if (_serverUrl.isEmpty) {
 			_log.info("Server URL is empty. Cannot upload.");
 			return;
@@ -176,6 +243,12 @@ class _WakewordScreenState extends State<WakewordScreen> {
 		} else {
 			_log.info("Upload failed: ${response.reasonPhrase}");
 		}
+	}
+
+	@override
+	void dispose() {
+		_httpServer?.close();
+		super.dispose();
 	}
 
 	@override

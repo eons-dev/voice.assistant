@@ -37,6 +37,9 @@ dependencies:
   record: ^5.1.2
   path_provider: ^2.0.11
   logging: ^1.2.0
+  shelf: ^1.4.1
+  shelf_multipart: ^2.0.0
+  just_audio: ^0.9.37
 
 dev_dependencies:
   flutter_test:
