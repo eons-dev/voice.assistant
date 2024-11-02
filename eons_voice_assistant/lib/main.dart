@@ -115,7 +115,7 @@ class _WakewordScreenState extends State<WakewordScreen> {
 
 		_log.info("Recording started...");
 		final directory = await getTemporaryDirectory();
-		final audioFilePath = "${directory.path}/recorded_audio.wav";
+		final audioFilePath = "${directory.path}/eva.audio.wav";
 
 		try {
 			await _audioRecorder.start(
@@ -168,7 +168,7 @@ class _WakewordScreenState extends State<WakewordScreen> {
 
 		_log.info("Uploading to $url...");
 		final request = http.MultipartRequest('POST', url);
-		request.files.add(await http.MultipartFile.fromPath('file', audioFilePath));
+		request.files.add(await http.MultipartFile.fromPath('audio', audioFilePath));
 
 		final response = await request.send();
 		if (response.statusCode == 200) {
